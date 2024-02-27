@@ -1,4 +1,9 @@
 # Gradescope API
+
+# Update from original
+    - Add hard due date to assignment (late_due)
+
+
 This is an initial attempt at reverse engineering gradescope to allow for automated submission and controlling other
 behaviour in an automated way as there is no official gradescope API.
 
@@ -16,11 +21,12 @@ and hitting `Log In` and will give you access to the things you can access throu
 
 ### Sessions
 ```
-session = GSConnection()
+connection = GSConnection()
 ```
 This creates a session but does not do any login work. This leaves the connection in an inactive state. In order
 to activate it you can call the following:
 ```
-session.login('my@email.com', 'my_password')
+connection.login('my@email.com', 'my_password')
+session = connection.session
 ```
 
