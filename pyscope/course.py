@@ -11,6 +11,8 @@ try:
 except ModuleNotFoundError:
    from .assignment import GSAssignment
 
+import re
+import json
 
 class LoadedCapabilities(Enum):
     ASSIGNMENTS = 0
@@ -105,7 +107,9 @@ class GSCourse():
                        template_file,
                        student_submissions = True,
                        late_submissions = False,
-                       group_submissions = 0):
+                       group_submissions = 0,
+                       late_due = None
+                       ):
         self._check_capabilities({LoadedCapabilities.ASSIGNMENTS})
         
         assignment_resp = self.session.get('https://www.gradescope.com/courses/'+self.cid+'/assignments')
@@ -120,6 +124,7 @@ class GSCourse():
             "assignment[release_date_string]" : release,
             "assignment[due_date_string]" : due,
             "assignment[allow_late_submissions]" : 1 if late_submissions else 0,
+            "assignment[hard_due_date_string]": late_due if late_submissions else None,
             "assignment[submission_type]" : "image", # TODO What controls this?
             "assignment[group_submission]" : group_submissions
         }
@@ -138,7 +143,7 @@ class GSCourse():
         self._check_capabilities({LoadedCapabilities.ASSIGNMENTS})
         
         assignment_resp = self.session.get('https://www.gradescope.com/courses/'+self.cid+'/assignments/'
-                                           +self.assignments[name].aid+'/edit')
+                                           +str(self.assignment_name2id[name])+'/edit')
         parsed_assignment_resp = BeautifulSoup(assignment_resp.text, 'html.parser')
         authenticity_token = parsed_assignment_resp.find('meta', attrs = {'name': 'csrf-token'} ).get('content')
 
@@ -148,7 +153,7 @@ class GSCourse():
         }
 
         remove_resp = self.session.post('https://www.gradescope.com/courses/'+self.cid+'/assignments/'
-                                     +self.assignments[name].aid,
+                                     +str(self.assignment_name2id[name]),
                                      data = remove_params)
 
         # TODO this is highly wasteful, need to likely improve this. 
@@ -156,35 +161,54 @@ class GSCourse():
         self._lazy_load_assignments()
 
     # ~~~~~~~~~~~~~~~~~~~~~~HOUSEKEEPING~~~~~~~~~~~~~~~~~~~~~~~~~
+    def _get_assignment_list(self):
+        assignment_resp = self.session.get('https://www.gradescope.com/courses/'+self.cid+'/assignments')
+        parsed_assignment_resp = BeautifulSoup(assignment_resp.text, 'html.parser')
+        
+        assignment_table = []
+        # print(parsed_assignment_resp)
+
+        for script in parsed_assignment_resp.find_all("script"):
+            if 'gon.ineligible_assignments' in script.text:
+                script_content = script.text
+                break
+        matches = re.search(r'gon\.ineligible_assignments\s*=\s*(\[.*?\]);', script_content, re.DOTALL)
+        assignment_data = []
+        if matches:
+            json_str = matches.group(1)
+            assignment_data = json.loads(json_str)
+        self.assignments = {}
+        for assignment in assignment_data:
+            self.assignments[assignment["id"]] = assignment["title"]
+        self.assignment_name2id = {v: k for k, v in self.assignments.items()}
 
     def _lazy_load_assignments(self):
         '''
         Load the assignment dictionary from assignments. This is done lazily to avoid slowdown caused by getting
         all the assignments for all classes. Also makes us less vulnerable to blocking.
         '''
-        assignment_resp = self.session.get('https://www.gradescope.com/courses/'+self.cid+'/assignments')
-        parsed_assignment_resp = BeautifulSoup(assignment_resp.text, 'html.parser')
+        self._get_assignment_list()
+        #TODO: need to fix this
+        # print(script_content)
+        # for assignment_row in parsed_assignment_resp.findAll('tr', class_ = 'js-assignmentTableAssignmentRow'):
+        #     row = []
+        #     for td in assignment_row.findAll('td'):
+        #         row.append(td)
+        #     assignment_table.append(row)
         
-        assignment_table = []
-        for assignment_row in parsed_assignment_resp.findAll('tr', class_ = 'js-assignmentTableAssignmentRow'):
-            row = []
-            for td in assignment_row.findAll('td'):
-                row.append(td)
-            assignment_table.append(row)
-        
-        for row in assignment_table:
-            name = row[0].text
-            aid = row[0].find('a').get('href').rsplit('/',1)[1]
-            points = row[1].text
-            # TODO: (released,due) = parse(row[2])
-            submissions = row[3].text
-            percent_graded = row[4].text
-            complete = True if 'workflowCheck-complete' in row[5].get('class') else False
-            regrades_on  = False if row[6].text == 'OFF' else True
-            # TODO make these types reasonable
-            self.assignments[name] = GSAssignment(name, aid, points, percent_graded, complete, regrades_on, self)
-        self.state.add(LoadedCapabilities.ASSIGNMENTS)
-        pass
+        # for row in assignment_table:
+        #     name = row[0].text
+        #     aid = row[0].find('a').get('href').rsplit('/',1)[1]
+        #     points = row[1].text
+        #     # TODO: (released,due) = parse(row[2])
+        #     submissions = row[3].text
+        #     percent_graded = row[4].text
+        #     complete = True if 'workflowCheck-complete' in row[5].get('class') else False
+        #     regrades_on  = False if row[6].text == 'OFF' else True
+        #     # TODO make these types reasonable
+        #     self.assignments[name] = GSAssignment(name, aid, points, percent_graded, complete, regrades_on, self)
+        # self.state.add(LoadedCapabilities.ASSIGNMENTS)
+        # pass
 
     def _lazy_load_roster(self):
         '''

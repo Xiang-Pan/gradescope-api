@@ -70,8 +70,13 @@ class GSConnection():
         instructor_courses = parsed_account_resp.find('h1', class_ ='pageHeading').next_sibling
         
         for course in instructor_courses.find_all('a', class_ = 'courseBox'):
+            print(course)
             shortname = course.find('h3', class_ = 'courseBox--shortname').text
-            name = course.find('h4', class_ = 'courseBox--name').text
+            print(shortname)
+            try:
+                name = course.find('h4', class_ = 'courseBox--name').text
+            except:
+                name = shortname
             cid = course.get("href").split("/")[-1]
             year = None
             print(cid, name, shortname)
@@ -86,7 +91,10 @@ class GSConnection():
         student_courses = parsed_account_resp.find('h1', class_ ='pageHeading', string = "Student Courses").next_sibling
         for course in student_courses.find_all('a', class_ = 'courseBox'):
             shortname = course.find('h3', class_ = 'courseBox--shortname').text
-            name = course.find('h4', class_ = 'courseBox--name').text
+            try:
+                name = course.find('h4', class_ = 'courseBox--name').text
+            except:
+                name = shortname
             cid = course.get("href").split("/")[-1]
             
             for tag in course.parent.previous_siblings:
