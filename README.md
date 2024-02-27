@@ -1,7 +1,8 @@
 # Gradescope API
 
 # Update from original
-    - Add hard due date to assignment (late_due)
+- Add hard due date to assignment (late_due)
+- Polish the documentation
 
 
 This is an initial attempt at reverse engineering gradescope to allow for automated submission and controlling other
